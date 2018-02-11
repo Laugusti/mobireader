@@ -305,7 +305,7 @@ func readExthHeader(r io.Reader) (*exthHeader, error) {
 	if err != nil {
 		return nil, err
 	}
-	header.RecordCount, err = getUint(buf, 4, 4)
+	header.RecordCount, err = getUint(buf, 8, 4)
 	if err != nil {
 		return nil, err
 	}
@@ -327,12 +327,19 @@ func readExthHeader(r io.Reader) (*exthHeader, error) {
 		if err != nil {
 			return nil, err
 		}
-		buf := make([]byte, record.Length-8)
-		_, err = io.ReadFull(r, buf)
+		data := make([]byte, record.Length-8)
+		_, err = io.ReadFull(r, data)
 		if err != nil {
 			return nil, err
 		}
-		record.Data = buf
+		record.Data = data
+	}
+
+	// skip EXTH padding (EXTH header length is padded to multiple of four)
+	padBytes := 4 - (header.Length % 4)
+	_, err = io.ReadFull(r, buf[:padBytes])
+	if err != nil {
+		return nil, err
 	}
 
 	return header, nil

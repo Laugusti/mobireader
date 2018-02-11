@@ -41,4 +41,14 @@ func main() {
 		log.Fatal(err)
 	}
 	fmt.Printf("mobi header %s\n", data)
+
+	exthHeader, err := readExthHeader(file)
+	if err != nil {
+		log.Fatal(err)
+	}
+	data, err = json.MarshalIndent(*exthHeader, "", "\t")
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("exth header %s\n", data)
 }
