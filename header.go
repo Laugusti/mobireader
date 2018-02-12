@@ -4,7 +4,7 @@ import (
 	"io"
 )
 
-type palmDocHeader struct {
+type PalmDocHeader struct {
 	Compression    uint64
 	Length         uint64
 	RecordCount    uint64
@@ -12,7 +12,7 @@ type palmDocHeader struct {
 	EncryptionType uint64
 }
 
-type mobiHeader struct {
+type MOBIHeader struct {
 	Identifier               string
 	Length                   uint64
 	MobiType                 uint64
@@ -70,21 +70,21 @@ type mobiHeader struct {
 	Unknown14                []byte
 }
 
-type exthHeader struct {
+type EXTHHeader struct {
 	Identifier  string
 	Length      uint64
 	RecordCount uint64
-	Records     []exthRecord
+	Records     []*EXTHRecord
 }
 
-type exthRecord struct {
+type EXTHRecord struct {
 	RecordType uint64
 	Length     uint64
 	Data       []byte
 }
 
-func readPalmDocHeader(r io.Reader) (*palmDocHeader, error) {
-	header := &palmDocHeader{}
+func readPalmDocHeader(r io.Reader) (*PalmDocHeader, error) {
+	header := &PalmDocHeader{}
 	buf := make([]byte, 16)
 	_, err := io.ReadFull(r, buf)
 	if err != nil {
@@ -119,8 +119,8 @@ func readPalmDocHeader(r io.Reader) (*palmDocHeader, error) {
 	return header, nil
 }
 
-func readMobiHeader(r io.Reader) (*mobiHeader, error) {
-	header := &mobiHeader{}
+func readMobiHeader(r io.Reader) (*MOBIHeader, error) {
+	header := &MOBIHeader{}
 	// read MOBI identifier and length
 	buf := make([]byte, 8)
 	_, err := io.ReadFull(r, buf)
@@ -290,8 +290,8 @@ func readMobiHeader(r io.Reader) (*mobiHeader, error) {
 	return header, nil
 }
 
-func readExthHeader(r io.Reader) (*exthHeader, error) {
-	header := &exthHeader{}
+func readExthHeader(r io.Reader) (*EXTHHeader, error) {
+	header := &EXTHHeader{}
 
 	// read EXTH identifier, length, and count
 	buf := make([]byte, 12)
@@ -311,10 +311,9 @@ func readExthHeader(r io.Reader) (*exthHeader, error) {
 	}
 
 	// read the EXTH records
-	header.Records = make([]exthRecord, header.RecordCount)
+	header.Records = make([]*EXTHRecord, header.RecordCount)
 	for i := 0; i < int(header.RecordCount); i++ {
-		record := &(header.Records[i])
-		*record = exthRecord{}
+		record := &EXTHRecord{}
 		_, err = io.ReadFull(r, buf[:8])
 		if err != nil {
 			return nil, err
@@ -333,6 +332,7 @@ func readExthHeader(r io.Reader) (*exthHeader, error) {
 			return nil, err
 		}
 		record.Data = data
+		header.Records[i] = record
 	}
 
 	// skip EXTH padding (EXTH header length is padded to multiple of four)

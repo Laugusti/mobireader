@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-type palmDatabaseFormat struct {
+type PalmDatabaseFormat struct {
 	Name               string
 	Attributes         uint64
 	Version            uint64
@@ -21,11 +21,11 @@ type palmDatabaseFormat struct {
 	UniqueIdSeed       uint64
 	NextRecordListId   uint64
 	NumRecords         uint64
-	RecordInfoEntries  []pdbRecordInfo
+	RecordInfoEntries  []*PDBRecordInfo
 	Unknown1           []byte
 }
 
-type pdbRecordInfo struct {
+type PDBRecordInfo struct {
 	Offset     uint64
 	Attributes uint64
 	Id         uint64
@@ -33,8 +33,8 @@ type pdbRecordInfo struct {
 
 var mobiStartDate = time.Date(1904, time.January, 1, 0, 0, 0, 0, time.UTC)
 
-func readPalmDatabaseFormat(r io.Reader) (*palmDatabaseFormat, error) {
-	format := &palmDatabaseFormat{}
+func readPalmDatabaseFormat(r io.Reader) (*PalmDatabaseFormat, error) {
+	format := &PalmDatabaseFormat{}
 
 	// read 78 bytes from Reader
 	buf := make([]byte, 78)
@@ -93,10 +93,9 @@ func readPalmDatabaseFormat(r io.Reader) (*palmDatabaseFormat, error) {
 	}
 
 	// read record info entries (NumRecord entries of 8 bytes each)
-	format.RecordInfoEntries = make([]pdbRecordInfo, format.NumRecords)
+	format.RecordInfoEntries = make([]*PDBRecordInfo, format.NumRecords)
 	for i := 0; i < int(format.NumRecords); i++ {
-		record := &(format.RecordInfoEntries[i])
-		*record = pdbRecordInfo{}
+		record := &PDBRecordInfo{}
 		buf := make([]byte, 8)
 		_, err := io.ReadFull(r, buf)
 		if err != nil {
@@ -115,6 +114,7 @@ func readPalmDatabaseFormat(r io.Reader) (*palmDatabaseFormat, error) {
 		if err != nil {
 			return nil, err
 		}
+		format.RecordInfoEntries[i] = record
 	}
 
 	// skip gap to data

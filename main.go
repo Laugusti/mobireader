@@ -3,11 +3,34 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"os"
+
+	"github.com/Laugusti/mobireader/palmdoc"
 )
 
 func main() {
+	foo()
+}
+
+func foo() {
+	file, err := os.Open("data.mobi")
+	if err != nil {
+		log.Fatal(err)
+	}
+	mobi, err := Create(file)
+	if err != nil {
+		log.Fatal(err)
+	}
+	data, err := json.MarshalIndent(*mobi, "", "\t")
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("pdb format: %s\n", data)
+}
+
+func bar() {
 	file, err := os.Open("data.mobi")
 	if err != nil {
 		log.Fatal(err)
@@ -51,4 +74,22 @@ func main() {
 		log.Fatal(err)
 	}
 	fmt.Printf("exth header %s\n", data)
+
+	start := format.RecordInfoEntries[1].Offset
+	end := format.RecordInfoEntries[2].Offset
+	_, err = file.Seek(int64(start), io.SeekStart)
+	if err != nil {
+		log.Fatal(err)
+	}
+	b := make([]byte, end-start+1)
+	_, err = io.ReadFull(file, b)
+	if err != nil {
+		log.Fatal(err)
+	}
+	res, err := palmdoc.Decompress(b)
+	if err != nil {
+		log.Fatal(err)
+	} else {
+		fmt.Printf("****RESULT:\n%s\n", res)
+	}
 }
