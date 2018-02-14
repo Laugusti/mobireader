@@ -1,4 +1,4 @@
-package main
+package mobireader
 
 import (
 	"io"
@@ -31,63 +31,65 @@ type PDBRecordInfo struct {
 	Id         uint64
 }
 
+// PDB format uses times counting in seconds from 1st Jan, 1904
 var mobiStartDate = time.Date(1904, time.January, 1, 0, 0, 0, 0, time.UTC)
 
+// readPalmDatabaseFormat creates a Palm Database Format from the reader
 func readPalmDatabaseFormat(r io.Reader) (*PalmDatabaseFormat, error) {
 	format := &PalmDatabaseFormat{}
 
 	// read 78 bytes from Reader
-	buf := make([]byte, 78)
-	_, err := io.ReadFull(r, buf)
+	b := make([]byte, 78)
+	_, err := io.ReadFull(r, b)
 	if err != nil {
 		return nil, err
 	}
 
 	// populate fields using byte slice
-	format.Name = strings.TrimRight(string(buf[0:32]), string(0))
-	format.Attributes, err = getUint(buf, 32, 2)
+	format.Name = strings.TrimRight(string(b[0:32]), string(0))
+	format.Attributes, err = getUint(b, 32, 2)
 	if err != nil {
 		return nil, err
 	}
-	format.Version, err = getUint(buf, 34, 2)
+	format.Version, err = getUint(b, 34, 2)
 	if err != nil {
 		return nil, err
 	}
-	format.CreationDate, err = getTime(buf, 36)
+	format.CreationDate, err = getTime(b, 36)
 	if err != nil {
 		return nil, err
 	}
-	format.ModificationDate, err = getTime(buf, 40)
+	format.ModificationDate, err = getTime(b, 40)
 	if err != nil {
 		return nil, err
 	}
-	format.LastBackupDate, err = getTime(buf, 44)
+	format.LastBackupDate, err = getTime(b, 44)
 	if err != nil {
 		return nil, err
 	}
-	format.ModificationNumber, err = getUint(buf, 48, 4)
+	format.ModificationNumber, err = getUint(b, 48, 4)
 	if err != nil {
 		return nil, err
 	}
-	format.AppInfoId, err = getUint(buf, 52, 4)
+	format.AppInfoId, err = getUint(b, 52, 4)
 	if err != nil {
 		return nil, err
 	}
-	format.SortInfoId, err = getUint(buf, 56, 4)
+	format.SortInfoId, err = getUint(b, 56, 4)
 	if err != nil {
 		return nil, err
 	}
-	format.FormatType = string(buf[60:64])
-	format.Creator = string(buf[64:68])
-	format.UniqueIdSeed, err = getUint(buf, 68, 4)
+	format.FormatType = string(b[60:64])
+	format.Creator = string(b[64:68])
+	format.UniqueIdSeed, err = getUint(b, 68, 4)
 	if err != nil {
 		return nil, err
 	}
-	format.NextRecordListId, err = getUint(buf, 72, 4)
+	format.NextRecordListId, err = getUint(b, 72, 4)
 	if err != nil {
 		return nil, err
 	}
-	format.NumRecords, err = getUint(buf, 76, 2)
+	format.NumRecords, err = getUint(b, 76, 2)
 	if err != nil {
 		return nil, err
 	}
@@ -96,21 +98,23 @@ func readPalmDatabaseFormat(r io.Reader) (*PalmDatabaseFormat, error) {
 	format.RecordInfoEntries = make([]*PDBRecordInfo, format.NumRecords)
 	for i := 0; i < int(format.NumRecords); i++ {
 		record := &PDBRecordInfo{}
-		buf := make([]byte, 8)
-		_, err := io.ReadFull(r, buf)
+
+		// each PDBRecord is 8 bytes
+		b := make([]byte, 8)
+		_, err := io.ReadFull(r, b)
 		if err != nil {
 			return nil, err
 		}
 
-		record.Offset, err = getUint(buf, 0, 4)
+		record.Offset, err = getUint(b, 0, 4)
 		if err != nil {
 			return nil, err
 		}
-		record.Attributes, err = getUint(buf, 4, 1)
+		record.Attributes, err = getUint(b, 4, 1)
 		if err != nil {
 			return nil, err
 		}
-		record.Id, err = getUint(buf, 5, 3)
+		record.Id, err = getUint(b, 5, 3)
 		if err != nil {
 			return nil, err
 		}
@@ -118,11 +122,11 @@ func readPalmDatabaseFormat(r io.Reader) (*PalmDatabaseFormat, error) {
 	}
 
 	// skip gap to data
-	_, err = io.ReadFull(r, buf[0:2])
+	_, err = io.ReadFull(r, b[0:2])
 	if err != nil {
 		return nil, err
 	}
-	format.Unknown1 = buf[0:2]
+	format.Unknown1 = b[0:2]
 
 	return format, nil
 }

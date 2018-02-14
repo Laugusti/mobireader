@@ -1,8 +1,4 @@
-package main
-
-import (
-	"io"
-)
+package mobireader
 
 type PalmDocHeader struct {
 	Compression    uint64
@@ -10,6 +6,7 @@ type PalmDocHeader struct {
 	RecordCount    uint64
 	RecordSize     uint64
 	EncryptionType uint64
+	Unknown1       []byte
 }
 
 type MOBIHeader struct {
@@ -83,263 +80,230 @@ type EXTHRecord struct {
 	Data       []byte
 }
 
-func readPalmDocHeader(r io.Reader) (*PalmDocHeader, error) {
+// readPalmDocHeader creates a PalmDoc header from the byte slice
+func readPalmDocHeader(b []byte) (*PalmDocHeader, error) {
 	header := &PalmDocHeader{}
-	buf := make([]byte, 16)
-	_, err := io.ReadFull(r, buf)
+
+	var err error
+
+	// creates header from the 16 byte slice
+	header.Compression, err = getUint(b, 0, 2)
 	if err != nil {
 		return nil, err
 	}
 
-	header.Compression, err = getUint(buf, 0, 2)
+	header.Length, err = getUint(b, 4, 4)
 	if err != nil {
 		return nil, err
 	}
 
-	header.Length, err = getUint(buf, 4, 4)
+	header.RecordCount, err = getUint(b, 8, 2)
 	if err != nil {
 		return nil, err
 	}
 
-	header.RecordCount, err = getUint(buf, 8, 2)
+	header.RecordSize, err = getUint(b, 10, 2)
 	if err != nil {
 		return nil, err
 	}
 
-	header.RecordSize, err = getUint(buf, 10, 2)
+	header.EncryptionType, err = getUint(b, 12, 2)
 	if err != nil {
 		return nil, err
 	}
 
-	header.EncryptionType, err = getUint(buf, 12, 2)
-	if err != nil {
-		return nil, err
-	}
+	header.Unknown1 = b[14:16]
 
 	return header, nil
 }
 
-func readMobiHeader(r io.Reader) (*MOBIHeader, error) {
+// readMobiHeader creates a MOBI header from the byte slice
+func readMobiHeader(b []byte) (*MOBIHeader, error) {
 	header := &MOBIHeader{}
-	// read MOBI identifier and length
-	buf := make([]byte, 8)
-	_, err := io.ReadFull(r, buf)
-	if err != nil {
-		return nil, err
-	}
 
-	header.Identifier = string(buf[0:4])
-	header.Length, err = getUint(buf, 4, 4)
+	var err error
+	header.Identifier = string(b[0:4])
+	header.Length, err = getUint(b, 4, 4)
+	header.MobiType, err = getUint(b, 8, 4)
 	if err != nil {
 		return nil, err
 	}
-
-	// read the rest of the MOBI header
-	rest := make([]byte, header.Length-8)
-	_, err = io.ReadFull(r, rest)
+	header.Encoding, err = getUint(b, 12, 4)
 	if err != nil {
 		return nil, err
 	}
-	buf = append(buf, rest...)
-
-	header.MobiType, err = getUint(buf, 8, 4)
+	header.UniqueId, err = getUint(b, 16, 4)
 	if err != nil {
 		return nil, err
 	}
-	header.Encoding, err = getUint(buf, 12, 4)
+	header.FileVersion, err = getUint(b, 20, 4)
 	if err != nil {
 		return nil, err
 	}
-	header.UniqueId, err = getUint(buf, 16, 4)
+	header.OrthographicIndex, err = getUint(b, 24, 4)
 	if err != nil {
 		return nil, err
 	}
-	header.FileVersion, err = getUint(buf, 20, 4)
+	header.InflectionIndex, err = getUint(b, 28, 4)
 	if err != nil {
 		return nil, err
 	}
-	header.OrthographicIndex, err = getUint(buf, 24, 4)
+	header.IndexNames = string(b[32:36])
+	header.IndexKeys = string(b[36:40])
+	header.ExtraIndex0 = string(b[40:44])
+	header.ExtraIndex1 = string(b[44:48])
+	header.ExtraIndex2 = string(b[48:52])
+	header.ExtraIndex3 = string(b[52:56])
+	header.ExtraIndex4 = string(b[56:60])
+	header.ExtraIndex5 = string(b[60:64])
+	header.FirstNonBookIndex, err = getUint(b, 64, 4)
 	if err != nil {
 		return nil, err
 	}
-	header.InflectionIndex, err = getUint(buf, 28, 4)
+	header.FullNameOffset, err = getUint(b, 68, 4)
 	if err != nil {
 		return nil, err
 	}
-	header.IndexNames = string(buf[32:36])
-	header.IndexKeys = string(buf[36:40])
-	header.ExtraIndex0 = string(buf[40:44])
-	header.ExtraIndex1 = string(buf[44:48])
-	header.ExtraIndex2 = string(buf[48:52])
-	header.ExtraIndex3 = string(buf[52:56])
-	header.ExtraIndex4 = string(buf[56:60])
-	header.ExtraIndex5 = string(buf[60:64])
-	header.FirstNonBookIndex, err = getUint(buf, 64, 4)
+	header.FullNameLength, err = getUint(b, 72, 4)
 	if err != nil {
 		return nil, err
 	}
-	header.FullNameOffset, err = getUint(buf, 68, 4)
+	header.Locale, err = getUint(b, 76, 4)
 	if err != nil {
 		return nil, err
 	}
-	header.FullNameLength, err = getUint(buf, 72, 4)
+	header.InputLanguage = string(b[80:84])
+	header.OutputLangugage = string(b[84:88])
+	header.MinVersion, err = getUint(b, 88, 4)
 	if err != nil {
 		return nil, err
 	}
-	header.Locale, err = getUint(buf, 76, 4)
+	header.FirstImageIndex, err = getUint(b, 92, 4)
 	if err != nil {
 		return nil, err
 	}
-	header.InputLanguage = string(buf[80:84])
-	header.OutputLangugage = string(buf[84:88])
-	header.MinVersion, err = getUint(buf, 88, 4)
+	header.HuffmanRecordOffset, err = getUint(b, 96, 4)
 	if err != nil {
 		return nil, err
 	}
-	header.FirstImageIndex, err = getUint(buf, 92, 4)
+	header.HuffmanRecordCount, err = getUint(b, 100, 4)
 	if err != nil {
 		return nil, err
 	}
-	header.HuffmanRecordOffset, err = getUint(buf, 96, 4)
+	header.HuffmanTableOffset, err = getUint(b, 104, 4)
 	if err != nil {
 		return nil, err
 	}
-	header.HuffmanRecordCount, err = getUint(buf, 100, 4)
+	header.HuffmanTableLength, err = getUint(b, 108, 4)
 	if err != nil {
 		return nil, err
 	}
-	header.HuffmanTableOffset, err = getUint(buf, 104, 4)
+	header.EXTHFlags, err = getUint(b, 112, 4)
 	if err != nil {
 		return nil, err
 	}
-	header.HuffmanTableLength, err = getUint(buf, 108, 4)
+	header.Unknown1 = b[112:144]
+	header.Unknown2 = b[144:148]
+	header.DRMOffset, err = getUint(b, 152, 4)
 	if err != nil {
 		return nil, err
 	}
-	header.EXTHFlags, err = getUint(buf, 112, 4)
+	header.DRMCount, err = getUint(b, 156, 4)
 	if err != nil {
 		return nil, err
 	}
-	header.Unknown1 = buf[112:144]
-	header.Unknown2 = buf[144:148]
-	header.DRMOffset, err = getUint(buf, 152, 4)
+	header.DRMSize, err = getUint(b, 160, 4)
 	if err != nil {
 		return nil, err
 	}
-	header.DRMCount, err = getUint(buf, 156, 4)
+	header.DRMFlags, err = getUint(b, 164, 4)
 	if err != nil {
 		return nil, err
 	}
-	header.DRMSize, err = getUint(buf, 160, 4)
+	header.Unknown3 = b[168:176]
+	header.FirstContentRecordNumber, err = getUint(b, 176, 2)
 	if err != nil {
 		return nil, err
 	}
-	header.DRMFlags, err = getUint(buf, 164, 4)
+	header.LastContentRecordNumber, err = getUint(b, 178, 2)
 	if err != nil {
 		return nil, err
 	}
-	header.Unknown3 = buf[168:176]
-	header.FirstContentRecordNumber, err = getUint(buf, 176, 2)
+	header.Unknown4 = b[180:184]
+	header.FCISRecordNumber, err = getUint(b, 184, 4)
 	if err != nil {
 		return nil, err
 	}
-	header.LastContentRecordNumber, err = getUint(buf, 178, 2)
+	header.Unknown5 = b[188:192]
+	header.FLISRecordNumber, err = getUint(b, 192, 4)
 	if err != nil {
 		return nil, err
 	}
-	header.Unknown4 = buf[180:184]
-	header.FCISRecordNumber, err = getUint(buf, 184, 4)
+	header.Unknown6 = b[196:200]
+	header.Unknown7 = b[200:208]
+	header.FirstCompDataSecCount, err = getUint(b, 212, 4)
 	if err != nil {
 		return nil, err
 	}
-	header.Unknown5 = buf[188:192]
-	header.FLISRecordNumber, err = getUint(buf, 192, 4)
+	header.NumCompDataSections, err = getUint(b, 216, 4)
 	if err != nil {
 		return nil, err
 	}
-	header.Unknown6 = buf[196:200]
-	header.Unknown7 = buf[200:208]
-	header.FirstCompDataSecCount, err = getUint(buf, 212, 4)
-	if err != nil {
-		return nil, err
-	}
-	header.NumCompDataSections, err = getUint(buf, 216, 4)
-	if err != nil {
-		return nil, err
-	}
-	header.Unknown8 = buf[220:224]
-	header.ExtraRecordDataFlag, err = getUint(buf, 224, 4)
+	header.Unknown8 = b[220:224]
+	header.ExtraRecordDataFlag, err = getUint(b, 224, 4)
 	if err != nil {
 		return nil, err
 	}
 	if header.Length > 228 {
-		header.INDXRecordOffset, err = getUint(buf, 228, 4)
+		header.INDXRecordOffset, err = getUint(b, 228, 4)
 		if err != nil {
 			return nil, err
 		}
 	}
 	if header.Length > 232 {
-		header.Unknown9 = buf[232:236]
-		header.Unknown10 = buf[236:240]
-		header.Unknown11 = buf[240:244]
-		header.Unknown12 = buf[244:248]
-		header.Unknown13 = buf[248:252]
-		header.Unknown14 = buf[252:256]
+		header.Unknown9 = b[232:236]
+		header.Unknown10 = b[236:240]
+		header.Unknown11 = b[240:244]
+		header.Unknown12 = b[244:248]
+		header.Unknown13 = b[248:252]
+		header.Unknown14 = b[252:256]
 	}
 
 	return header, nil
 }
 
-func readExthHeader(r io.Reader) (*EXTHHeader, error) {
+// readExthHeader creates a EXTH header from the byte slice
+func readExthHeader(b []byte) (*EXTHHeader, error) {
 	header := &EXTHHeader{}
 
-	// read EXTH identifier, length, and count
-	buf := make([]byte, 12)
-	_, err := io.ReadFull(r, buf)
+	var err error
+	header.Identifier = string(b[0:4])
+	header.Length, err = getUint(b, 4, 4)
 	if err != nil {
 		return nil, err
 	}
-
-	header.Identifier = string(buf[0:4])
-	header.Length, err = getUint(buf, 4, 4)
-	if err != nil {
-		return nil, err
-	}
-	header.RecordCount, err = getUint(buf, 8, 4)
+	header.RecordCount, err = getUint(b, 8, 4)
 	if err != nil {
 		return nil, err
 	}
 
 	// read the EXTH records
+	pos := 12
 	header.Records = make([]*EXTHRecord, header.RecordCount)
 	for i := 0; i < int(header.RecordCount); i++ {
 		record := &EXTHRecord{}
-		_, err = io.ReadFull(r, buf[:8])
+		record.RecordType, err = getUint(b, pos, 4)
 		if err != nil {
 			return nil, err
 		}
-		record.RecordType, err = getUint(buf, 0, 4)
+		record.Length, err = getUint(b, pos+4, 4)
 		if err != nil {
 			return nil, err
 		}
-		record.Length, err = getUint(buf, 4, 4)
-		if err != nil {
-			return nil, err
-		}
-		data := make([]byte, record.Length-8)
-		_, err = io.ReadFull(r, data)
-		if err != nil {
-			return nil, err
-		}
-		record.Data = data
-		header.Records[i] = record
-	}
 
-	// skip EXTH padding (EXTH header length is padded to multiple of four)
-	padBytes := 4 - (header.Length % 4)
-	_, err = io.ReadFull(r, buf[:padBytes])
-	if err != nil {
-		return nil, err
+		record.Data = b[pos+8 : pos+int(record.Length)]
+		header.Records[i] = record
+		pos += int(record.Length)
 	}
 
 	return header, nil

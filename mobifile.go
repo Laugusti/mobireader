@@ -1,4 +1,4 @@
-package main
+package mobireader
 
 import (
 	"fmt"
@@ -21,9 +21,8 @@ type DataRecord struct {
 }
 
 // Create creats a MOBIFile from the Reader interface
-func Create(r io.Reader) (*MOBIFile, error) {
+func Create(reader io.Reader) (*MOBIFile, error) {
 	mobi := &MOBIFile{}
-	reader := countReader(r)
 
 	// read MobiPocket file format
 	err := readFormat(mobi, reader)
@@ -31,27 +30,24 @@ func Create(r io.Reader) (*MOBIFile, error) {
 		return nil, err
 	}
 
-	// read the first record (contains headers)
-	err = readFirstRecord(mobi, reader)
+	// read all records
+	err = readRawRecords(mobi, reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read all records: %v", err)
+	}
+
+	// set Headers on the MOBI file using the first record
+	err = addHeaders(mobi)
 	if err != nil {
 		return nil, err
 	}
 
-	// read the rest of Record 0
-	endRecord0 := mobi.PDBFormat.RecordInfoEntries[1].Offset
-	fmt.Printf("read: %d, eor: %d\n", *reader.count, endRecord0)
-	if *reader.count < endRecord0 {
-		_, err := io.ReadFull(reader, make([]byte, endRecord0-*reader.count))
-		if err != nil {
-			return nil, fmt.Errorf("failed the remaining of record 0: %v", err)
-		}
+	// decompress/unencrpt text Records
+	err = decompressTextRecords(mobi)
+	if err != nil {
+		return nil, err
 	}
 
-	// read the other records
-	err = readRemainingRecords(mobi, reader)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read all records: %v", err)
-	}
 	return mobi, nil
 }
 
@@ -66,20 +62,23 @@ func readFormat(mobi *MOBIFile, reader io.Reader) error {
 }
 
 // readFirstRecord reads the Headers from Record 0 into the MOBIFile
-func readFirstRecord(mobi *MOBIFile, reader io.Reader) error {
-	palmDocHeader, err := readPalmDocHeader(reader)
+func addHeaders(mobi *MOBIFile) error {
+	// PalmDOC Header is the first 16 bytes
+	palmDocHeader, err := readPalmDocHeader(mobi.Records[0].Data[:16])
 	if err != nil {
 		return fmt.Errorf("failed to read palm doc header: %v", err)
 	}
 	mobi.PDHeader = palmDocHeader
 
-	mobiHeader, err := readMobiHeader(reader)
+	// MOBI Header follows PalmDOC header
+	mobiHeader, err := readMobiHeader(mobi.Records[0].Data[16:])
 	if err != nil {
 		return fmt.Errorf("failed to read MOBI header: %v", err)
 	}
 	mobi.MobiHeader = mobiHeader
 
-	exthHeader, err := readExthHeader(reader)
+	// EXTH Header follows the MOBI header
+	exthHeader, err := readExthHeader(mobi.Records[0].Data[16+mobiHeader.Length:])
 	if err != nil {
 		return fmt.Errorf("failed to read EXTH header: %v", err)
 	}
@@ -88,55 +87,70 @@ func readFirstRecord(mobi *MOBIFile, reader io.Reader) error {
 	return nil
 }
 
-// readRemainingRecords reads all ContentRecords (1 - NumRecords) into the MOBIFile
-func readRemainingRecords(mobi *MOBIFile, reader io.Reader) error {
-	numRecords := int(mobi.PDBFormat.NumRecords)
-	records := make([]*DataRecord, numRecords-1)
-	for i := 1; i < 2; i++ {
-		var data []byte // raw bytes from record
-		if i != (numRecords - 1) {
-			startOffset := mobi.PDBFormat.RecordInfoEntries[i].Offset
-			endOffset := mobi.PDBFormat.RecordInfoEntries[i+1].Offset
-			data = make([]byte, endOffset-startOffset+1)
-			_, err := io.ReadFull(reader, data)
-			if err != nil {
-				return err
-			}
-		} else {
-			b, err := ioutil.ReadAll(reader)
-			if err != nil {
-				return err
-			}
-			data = b
-		}
-		isContent := (i >= int(mobi.MobiHeader.FirstContentRecordNumber)) &&
-			(i <= int(mobi.MobiHeader.LastContentRecordNumber))
-		compressionType := int(mobi.PDHeader.Compression)
-		encryptionType := int(mobi.PDHeader.EncryptionType)
-		dataRecord, err := getDataRecord(data, compressionType, encryptionType, isContent)
-		if err != nil {
-			return err
-		}
-		records[i-1] = dataRecord
+// readRawRecords reads all records into the MOBIFile,
+func readRawRecords(mobi *MOBIFile, reader io.Reader) error {
+	// read raw bytes from reader
+	data, err := ioutil.ReadAll(reader)
+	if err != nil {
+		return err
 	}
-	mobi.Records = records
+	numRecords := int(mobi.PDBFormat.NumRecords)
+	// format was already read from the reader, there Record Offsets
+	// needs to be offset
+	offset := 0
+	if numRecords > 0 {
+		offset = int(mobi.PDBFormat.RecordInfoEntries[0].Offset)
+	}
+	// create DataRecords from raw bytes
+	mobi.Records = make([]*DataRecord, numRecords)
+	for i := 0; i < numRecords; i++ {
+		var start, end int
+		start = int(mobi.PDBFormat.RecordInfoEntries[i].Offset) - offset
+		if i != (numRecords - 1) {
+			end = int(mobi.PDBFormat.RecordInfoEntries[i+1].Offset) - offset
+		} else {
+			end = len(data)
+		}
+		mobi.Records[i] = &DataRecord{data[start:end]}
+	}
 	return nil
 }
 
-// returns the data record (decompress/unencrypt if necessary)
-func getDataRecord(data []byte, compressionType, encryptionType int, isContent bool) (*DataRecord, error) {
+// decompressTextRecords decompress all the text records in the MOBI file
+func decompressTextRecords(mobi *MOBIFile) error {
+	compressionType := int(mobi.PDHeader.Compression)
+	encryptionType := int(mobi.PDHeader.EncryptionType)
+
+	// loop through text records and decompress
+	for i := mobi.MobiHeader.FirstContentRecordNumber; i < mobi.MobiHeader.FirstImageIndex; i++ {
+
+		err := decompressRecord(mobi.Records[i], compressionType, encryptionType)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// deCompressRecord decompresses/unencrypts the DataRecord
+func decompressRecord(dataRecord *DataRecord, compressionType, encryptionType int) error {
+	// compression type must be either non or palmdoc
 	if compressionType != 1 && compressionType != 2 {
-		return nil, fmt.Errorf("compression type(%d) is not supported", compressionType)
+		return fmt.Errorf("compression type(%d) is not supported", compressionType)
 	}
+
+	// no encryption is supported
 	if encryptionType != 0 {
-		return nil, fmt.Errorf("encryption type(%d) is not supported", encryptionType)
+		return fmt.Errorf("encryption type(%d) is not supported", encryptionType)
 	}
-	if !isContent || compressionType == 1 {
-		return &DataRecord{data}, nil
+
+	// decompress if compression type is palmdoc
+	if compressionType == 2 {
+		b, err := palmdoc.Decompress(dataRecord.Data)
+		if err != nil {
+			return fmt.Errorf("failed to decompress record: %v", err)
+		}
+		dataRecord.Data = b
 	}
-	b, err := palmdoc.Decompress(data)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decompress record: %v", err)
-	}
-	return &DataRecord{b}, nil
+	return nil
 }

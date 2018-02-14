@@ -1,4 +1,4 @@
-package main
+package mobireader
 
 import (
 	"bytes"
