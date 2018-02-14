@@ -1,3 +1,5 @@
+// package mobireader reads a MOBI File into a struct from a
+// io.Reader
 package mobireader
 
 import (
