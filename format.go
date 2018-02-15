@@ -6,6 +6,7 @@ import (
 	"time"
 )
 
+// PalmDatabaseFormat represents the PDB format of a MOBI file
 type PalmDatabaseFormat struct {
 	Name               string
 	Attributes         uint64
@@ -14,21 +15,22 @@ type PalmDatabaseFormat struct {
 	ModificationDate   time.Time
 	LastBackupDate     time.Time
 	ModificationNumber uint64
-	AppInfoId          uint64
-	SortInfoId         uint64
+	AppInfoID          uint64
+	SortInfoID         uint64
 	FormatType         string
 	Creator            string
-	UniqueIdSeed       uint64
-	NextRecordListId   uint64
+	UniqueIDSeed       uint64
+	NextRecordListID   uint64
 	NumRecords         uint64
 	RecordInfoEntries  []*PDBRecordInfo
 	Unknown1           []byte
 }
 
+// PDBRecordInfo represents the headers (info) of a Record in a MOBI file
 type PDBRecordInfo struct {
 	Offset     uint64
 	Attributes uint64
-	Id         uint64
+	ID         uint64
 }
 
 // PDB format uses times counting in seconds from 1st Jan, 1904
@@ -71,21 +73,21 @@ func readPalmDatabaseFormat(r io.Reader) (*PalmDatabaseFormat, error) {
 	if err != nil {
 		return nil, err
 	}
-	format.AppInfoId, err = getUint(b, 52, 4)
+	format.AppInfoID, err = getUint(b, 52, 4)
 	if err != nil {
 		return nil, err
 	}
-	format.SortInfoId, err = getUint(b, 56, 4)
+	format.SortInfoID, err = getUint(b, 56, 4)
 	if err != nil {
 		return nil, err
 	}
 	format.FormatType = string(b[60:64])
 	format.Creator = string(b[64:68])
-	format.UniqueIdSeed, err = getUint(b, 68, 4)
+	format.UniqueIDSeed, err = getUint(b, 68, 4)
 	if err != nil {
 		return nil, err
 	}
-	format.NextRecordListId, err = getUint(b, 72, 4)
+	format.NextRecordListID, err = getUint(b, 72, 4)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +116,7 @@ func readPalmDatabaseFormat(r io.Reader) (*PalmDatabaseFormat, error) {
 		if err != nil {
 			return nil, err
 		}
-		record.Id, err = getUint(b, 5, 3)
+		record.ID, err = getUint(b, 5, 3)
 		if err != nil {
 			return nil, err
 		}

@@ -1,6 +1,7 @@
 package mobireader
 
-type PalmDocHeader struct {
+// PalmDOCHeader represents the PalmDOC header of a MOBI file
+type PalmDOCHeader struct {
 	Compression    uint64
 	Length         uint64
 	RecordCount    uint64
@@ -9,12 +10,13 @@ type PalmDocHeader struct {
 	Unknown1       []byte
 }
 
+// MOBIHeader represents the MOBI header of a MOBI file
 type MOBIHeader struct {
 	Identifier               string
 	Length                   uint64
 	MobiType                 uint64
 	Encoding                 uint64
-	UniqueId                 uint64
+	UniqueID                 uint64
 	FileVersion              uint64
 	OrthographicIndex        uint64
 	InflectionIndex          uint64
@@ -67,6 +69,7 @@ type MOBIHeader struct {
 	Unknown14                []byte
 }
 
+// EXTHHeader represents the EXTH header of a MOBI file
 type EXTHHeader struct {
 	Identifier  string
 	Length      uint64
@@ -74,6 +77,7 @@ type EXTHHeader struct {
 	Records     []*EXTHRecord
 }
 
+// EXTHRecord represents an EXTH record
 type EXTHRecord struct {
 	RecordType uint64
 	Length     uint64
@@ -81,8 +85,8 @@ type EXTHRecord struct {
 }
 
 // readPalmDocHeader creates a PalmDoc header from the byte slice
-func readPalmDocHeader(b []byte) (*PalmDocHeader, error) {
-	header := &PalmDocHeader{}
+func readPalmDocHeader(b []byte) (*PalmDOCHeader, error) {
+	header := &PalmDOCHeader{}
 
 	var err error
 
@@ -132,7 +136,7 @@ func readMobiHeader(b []byte) (*MOBIHeader, error) {
 	if err != nil {
 		return nil, err
 	}
-	header.UniqueId, err = getUint(b, 16, 4)
+	header.UniqueID, err = getUint(b, 16, 4)
 	if err != nil {
 		return nil, err
 	}
@@ -270,6 +274,11 @@ func readMobiHeader(b []byte) (*MOBIHeader, error) {
 	}
 
 	return header, nil
+}
+
+// hasEXTH returns true if the MOBIHeader indicates there is a EXTH header
+func (mh *MOBIHeader) hasEXTH() bool {
+	return (mh.EXTHFlags & 0x40) != 0
 }
 
 // readExthHeader creates a EXTH header from the byte slice

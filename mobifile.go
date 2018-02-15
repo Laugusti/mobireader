@@ -1,4 +1,4 @@
-// package mobireader reads a MOBI File into a struct from a
+// Package mobireader reads a MOBI File into a struct from a
 // io.Reader
 package mobireader
 
@@ -10,14 +10,16 @@ import (
 	"github.com/Laugusti/mobireader/palmdoc"
 )
 
+// MOBIFile contains the format, headers, and data records of a MOBI file
 type MOBIFile struct {
 	PDBFormat  *PalmDatabaseFormat
-	PDHeader   *PalmDocHeader
+	PDHeader   *PalmDOCHeader
 	MobiHeader *MOBIHeader
 	ExthHeader *EXTHHeader
 	Records    []*DataRecord
 }
 
+// DataRecord represents the bytes of a Record in the MOBI file
 type DataRecord struct {
 	Data []byte
 }
@@ -80,11 +82,13 @@ func addHeaders(mobi *MOBIFile) error {
 	mobi.MobiHeader = mobiHeader
 
 	// EXTH Header follows the MOBI header
-	exthHeader, err := readExthHeader(mobi.Records[0].Data[16+mobiHeader.Length:])
-	if err != nil {
-		return fmt.Errorf("failed to read EXTH header: %v", err)
+	if mobiHeader.hasEXTH() {
+		exthHeader, err := readExthHeader(mobi.Records[0].Data[16+mobiHeader.Length:])
+		if err != nil {
+			return fmt.Errorf("failed to read EXTH header: %v", err)
+		}
+		mobi.ExthHeader = exthHeader
 	}
-	mobi.ExthHeader = exthHeader
 
 	return nil
 }

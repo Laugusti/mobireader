@@ -7,19 +7,21 @@ import (
 	"time"
 )
 
-func getUint(buf []byte, offset, nBytes int) (uint64, error) {
+// getUint read a Uint from the raw bytes
+func getUint(b []byte, offset, nBytes int) (uint64, error) {
 	if nBytes > 8 {
 		return 0, errors.New("no support for integers with size > 8 bytes")
 	}
-	b := bytes.NewReader(append(make([]byte, 8-nBytes), buf[offset:offset+nBytes]...))
+	r := bytes.NewReader(append(make([]byte, 8-nBytes), b[offset:offset+nBytes]...))
 
 	var x uint64
-	err := binary.Read(b, binary.BigEndian, &x)
+	err := binary.Read(r, binary.BigEndian, &x)
 	return x, err
 }
 
-func getTime(buf []byte, offset int) (time.Time, error) {
-	seconds, err := getUint(buf, offset, 4)
+// getTime returns a time.Time from the raw bytes
+func getTime(b []byte, offset int) (time.Time, error) {
+	seconds, err := getUint(b, offset, 4)
 	if err != nil {
 		return time.Time{}, err
 	}
