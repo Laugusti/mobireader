@@ -3,6 +3,7 @@
 package mobireader
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -53,6 +54,18 @@ func Create(reader io.Reader) (*MOBIFile, error) {
 	}
 
 	return mobi, nil
+}
+
+// Text returns all TextRecords as a single string
+func (m *MOBIFile) Text() (string, error) {
+	var buf bytes.Buffer
+	for i := m.MobiHeader.FirstContentRecordNumber; i < m.MobiHeader.FirstImageIndex; i++ {
+		_, err := buf.Write(m.Records[i].Data)
+		if err != nil {
+			return "", err
+		}
+	}
+	return buf.String(), nil
 }
 
 // readFormat reads the Palm Database Format structure into the MOBIFile
