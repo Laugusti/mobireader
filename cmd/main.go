@@ -20,6 +20,7 @@ func main() {
 
 	// open file
 	file, err := os.Open(*filename)
+	defer file.Close() // ignoring error when closing file
 	if err != nil {
 		log.Fatalf("failed to open file: %v", err)
 	}
